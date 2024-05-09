@@ -1,0 +1,20 @@
+pandas
+numpy
+scikit-learn
+matplotlib
+seaborn
+scipy
+networkx
+grakel
+node2vec
+torch==2.3  # ==1.11.0
+torchvision
+torch_geometric==2.5.3  # ==2.0.2
+openbabel  # this one might cause issues, look up and install binaries first (ubuntu: 
+fsspec
+rdkit
+# pip install dgl-cu111 dglgo -f https://data.dgl.ai/wheels/repo.html
+performer-pytorch
+torchmetrics  # ==0.7.2
+ogb
+wandb
