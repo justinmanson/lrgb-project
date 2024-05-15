@@ -18,3 +18,5 @@ performer-pytorch
 torchmetrics  # ==0.7.2
 ogb
 wandb
+dgl==0.9.1$
+pytorch_lightning
