@@ -4,8 +4,10 @@ import torch.nn as nn
 import torch.nn.functional as F
 from torch_scatter import scatter
 from torch_geometric.utils import remove_self_loops
-from torch_geometric.nn import global_mean_pool
 from torch_geometric.graphgym.register import register_head
+
+import torch_geometric.graphgym.register as register
+from torch_geometric.graphgym import cfg
 
 
 def negate_edge_index(edge_index, batch=None):
@@ -299,7 +301,7 @@ class SANGraphHead(nn.Module):
 
     def __init__(self, dim_in, dim_out, L=2):
         super().__init__()
-        self.pooling_fun = global_mean_pool  # Peptides-func uses "mean" graph_pooling
+        self.pooling_fun = register.pooling_dict[cfg.model.graph_pooling]  # global_mean_pool()
         list_FC_layers = [
             nn.Linear(dim_in // 2 ** l, dim_in // 2 ** (l + 1), bias=True)
             for l in range(L)]

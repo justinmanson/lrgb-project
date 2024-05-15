@@ -3,8 +3,6 @@ import torch
 import torch.nn as nn
 import torch.nn.functional as F
 import dgl
-from torch_scatter import scatter
-from torch_geometric.utils import remove_self_loops
 import torch_geometric.graphgym.register as register
 from torch_geometric.nn import GCNConv
 from torch_geometric.data import Data
@@ -19,15 +17,10 @@ from torch_geometric.graphgym.config import (cfg, dump_cfg,
                                              set_cfg, load_cfg,
                                              makedirs_rm_exist) 
 from torch_geometric.graphgym.model_builder import create_model
-from torch_geometric.utils import to_scipy_sparse_matrix, get_laplacian
 from functools import partial
-from transform.posenc_stats import get_lap_decomp_stats
 
 # import custom configs
 from config import *
-from model import *
-from encoder import *
-from transform import *
     
 def train(model: torch.nn.Module, loader: DataLoader, optimizer: Optimizer, device: torch.device) -> float:
     model.train()
@@ -36,7 +29,7 @@ def train(model: torch.nn.Module, loader: DataLoader, optimizer: Optimizer, devi
     for data in tqdm(loader):
         data = data.to(device)
         optimizer.zero_grad()
-        out, _ = model(data)  # the SANGraphHead module returns a pred, label tuple
+        out, _ = model(data)  # GNNGraphHead() module returns a pred, label tuple
         loss = loss_function(out, data.y.float())
         loss.backward()
         optimizer.step()
@@ -49,7 +42,7 @@ def test(model: torch.nn.Module, loader: DataLoader, device: torch.device) -> fl
     all_labels = []
     for data in tqdm(loader):
         data = data.to(device)
-        out, _ = model(data)  # the SANGraphHead module returns a pred, label tuple
+        out, _ = model(data)  # GNNGraphHead() module returns a pred, label tuple
         preds = torch.sigmoid(out).detach().cpu().numpy()
         labels = data.y.detach().cpu().numpy()
         all_preds.append(preds)
@@ -69,34 +62,13 @@ class Args:
         self.opts = []  # You can add any additional options here if needed
 
 
-def compute_laplacian_eigen(data, normalization='sym', max_freqs=10, eigvec_norm=None):
-    """Compute eigenvalues and eigenvectors of the graph Laplacian."""
-    N = data.num_nodes if hasattr(data, 'num_nodes') else data.x.shape[0]
-    L = to_scipy_sparse_matrix(
-        *get_laplacian(data.edge_index, normalization=normalization, num_nodes=N)
-    )
-    
-    evals, evects = np.linalg.eigh(L.toarray())
-    
-    max_freqs=cfg.posenc_LapPE.eigen.max_freqs
-    eigvec_norm=cfg.posenc_LapPE.eigen.eigvec_norm
-
-    data.EigVals, data.EigVecs = get_lap_decomp_stats(
-        evals=evals, evects=evects,
-        max_freqs=max_freqs,
-        eigvec_norm=eigvec_norm
-    )
-
-    return data
-
-
 def main():
     # For full path
     script_dir = os.path.dirname(os.path.realpath(__file__))
-    config_file = os.path.join(script_dir, 'peptides-func-SAN.yaml')
+    config_file = os.path.join(script_dir, 'peptides-func-GCN.yaml')
 
     # Hardcode the configuration file
-    # config_file = 'peptides-func-SAN.yaml'
+    # config_file = 'peptides-func-GCN.yaml'
     args = Args(config_file)  # format to make load_cfg() work
     
     # Set and load config
@@ -107,21 +79,14 @@ def main():
     device = torch.device(cfg.accelerator)  # my prefered notation
     print(f'Using device: {device}')
 
-    pre_transform_func = partial(
-        compute_laplacian_eigen, 
-        normalization=cfg.posenc_LapPE.eigen.laplacian_norm, 
-        max_freqs=cfg.posenc_LapPE.eigen.max_freqs, 
-        eigvec_norm=cfg.posenc_LapPE.eigen.eigvec_norm
-    )
-
     # Load training and testing sets
-    train_dataset = LRGBDataset(root="data", name="peptides-func", split='train', pre_transform=pre_transform_func)
-    test_dataset = LRGBDataset(root="data", name="peptides-func", split='test', pre_transform=pre_transform_func)
+    train_dataset = LRGBDataset(root="data", name="peptides-func", split='train')
+    test_dataset = LRGBDataset(root="data", name="peptides-func", split='test')
     train_loader = DataLoader(train_dataset, batch_size=cfg.train.batch_size, shuffle=True)
     test_loader = DataLoader(test_dataset, batch_size=cfg.train.batch_size, shuffle=False)
 
-    # Initialize SAN model
-    model = create_model(dim_out=10)
+    # Initialize GCN model
+    model = create_model(dim_out=10)  # uses graphgym GNN() module  (torch_geometric > graphgym > models > gnn.py)
 
     # Optimizer (asserts since I overwrode with my own)
     assert cfg.optim.optimizer == "adamW", "We implement 'adamW' but cfg specifies other option"
@@ -158,7 +123,7 @@ def main():
             best_accuracy = test_acc
             best_epoch = epoch
             no_improve_epochs = 0
-            torch.save(model.state_dict(), os.path.join(model_save_dir, f'san_weights.pt'))
+            torch.save(model.state_dict(), os.path.join(model_save_dir, f'gcn_weights.pt'))
             print(f'New best model saved at epoch {epoch} with accuracy {test_acc:.4f}')
         else:
             no_improve_epochs += 1
@@ -169,7 +134,7 @@ def main():
 
         print(f'Epoch: {epoch:03d}, Loss: {loss:.4f}, Accuracy: {test_acc:.4f}')
 
-    print(f'Best SAN model: Epoch {best_epoch} with Accuracy {best_accuracy:.4f}')
+    print(f'Best GCN model: Epoch {best_epoch} with Accuracy {best_accuracy:.4f}')
 
 
 if __name__ == "__main__":
