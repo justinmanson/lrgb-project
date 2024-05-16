@@ -18,6 +18,7 @@ from torch_geometric.graphgym.config import (cfg, dump_cfg,
                                              makedirs_rm_exist) 
 from torch_geometric.graphgym.model_builder import create_model
 from functools import partial
+from typing import Tuple
 
 # import custom configs
 from config import *
@@ -36,13 +37,17 @@ def train(model: torch.nn.Module, loader: DataLoader, optimizer: Optimizer, devi
         total_loss += loss.item()
     return total_loss / len(loader)
 
-def test(model: torch.nn.Module, loader: DataLoader, device: torch.device) -> float:
+def test(model: torch.nn.Module, loader: DataLoader, device: torch.device) -> Tuple[float, float]:
     model.eval()
     all_preds = []
     all_labels = []
+    total_loss = 0.0
+    loss_function = torch.nn.BCEWithLogitsLoss()
     for data in tqdm(loader):
         data = data.to(device)
         out, _ = model(data)  # GNNGraphHead() module returns a pred, label tuple
+        loss = loss_function(out, data.y.float())
+        total_loss += loss.item()
         preds = torch.sigmoid(out).detach().cpu().numpy()
         labels = data.y.detach().cpu().numpy()
         all_preds.append(preds)
@@ -53,7 +58,7 @@ def test(model: torch.nn.Module, loader: DataLoader, device: torch.device) -> fl
     # Calculate mean Average Precision
     ap_scores = [average_precision_score(all_labels[:, i], all_preds[:, i]) for i in range(all_labels.shape[1])]
     mean_ap = np.mean(ap_scores)
-    return mean_ap
+    return mean_ap, total_loss / len(loader)
 
 
 class Args:
@@ -115,8 +120,8 @@ def main():
 
     for epoch in range(1, cfg.optim.max_epoch + 1):
         loss = train(model, train_loader, optimizer, device)
-        test_acc = test(model, test_loader, device)
-        scheduler.step(test_acc)
+        test_acc, test_loss = test(model, test_loader, device)
+        scheduler.step(test_loss)
 
         # Early Stopping and Checkpoint Logic
         if test_acc > best_accuracy:

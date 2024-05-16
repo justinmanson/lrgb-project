@@ -10,6 +10,7 @@ from torch_geometric.data import Dataset
 from tqdm import tqdm
 from sklearn.metrics import average_precision_score
 import numpy as np
+from typing import Tuple
 
 class GCN(torch.nn.Module):
     def __init__(self, num_features: int, num_classes: int):
@@ -50,13 +51,17 @@ def train(model: torch.nn.Module, loader: DataLoader, optimizer: Optimizer, devi
         total_loss += loss.item()
     return total_loss / len(loader)
 
-def test(model: torch.nn.Module, loader: DataLoader, device: torch.device) -> float:
+def test(model: torch.nn.Module, loader: DataLoader, device: torch.device) -> Tuple[float, float]:
     model.eval()
     all_preds = []
     all_labels = []
+    total_loss = 0.0
+    loss_function = torch.nn.BCEWithLogitsLoss()
     for data in tqdm(loader):
         data = data.to(device)
         out = model(data)
+        loss = loss_function(out, data.y.float())
+        total_loss += loss.item()
         preds = torch.sigmoid(out).detach().cpu().numpy()
         labels = data.y.detach().cpu().numpy()
         all_preds.append(preds)
@@ -67,7 +72,7 @@ def test(model: torch.nn.Module, loader: DataLoader, device: torch.device) -> fl
     # Calculate mean Average Precision
     ap_scores = [average_precision_score(all_labels[:, i], all_preds[:, i]) for i in range(all_labels.shape[1])]
     mean_ap = np.mean(ap_scores)
-    return mean_ap
+    return mean_ap, total_loss / len(loader)
 
 
 def main():
@@ -102,8 +107,8 @@ def main():
 
     for epoch in range(1, 501):
         loss = train(gcn, train_loader, optimizer, device)
-        test_acc = test(gcn, test_loader, device)
-        scheduler.step(test_acc)
+        test_acc, test_loss = test(gcn, test_loader, device)
+        scheduler.step(test_loss)
 
         # Early Stopping and Checkpoint Logic
         if test_acc > best_accuracy:
