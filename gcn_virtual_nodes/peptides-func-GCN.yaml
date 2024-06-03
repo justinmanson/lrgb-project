@@ -13,6 +13,9 @@ dataset:
   node_encoder_name: Atom
   node_encoder_bn: False
   edge_encoder: False
+  # edge_encoder: True
+  # edge_encoder_name: Bond
+  # edge_encoder_bn: False
 train:
   # mode: custom
   batch_size: 128
@@ -27,7 +30,7 @@ gnn:
   layers_mp: 5
   layers_post_mp: 1
   dim_inner: 300
-  layer_type: gcnconv
+  layer_type: gcnconv_learned_vn
   stage_type: stack
   batchnorm: True
   act: relu
@@ -43,12 +46,5 @@ optim:
   reduce_factor: 0.5
   schedule_patience: 20
   min_lr: 1e-5
-
-
-# Note about Atom node encoder:
-# Applies a separate embedding layer to each individual element of a node feature
-# and sums the result. 
-# For instance for [num_nodes, num_features], we have num_features embedding layers
-# of shape [1, hidden_dim] that produce num_features separate embeddings of shape hidden_dim
-# which we then sum to obtain the final embedding.
-# note - each embedding layer is trainable
+vn:
+  num_vns: 4

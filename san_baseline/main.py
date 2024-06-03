@@ -158,7 +158,7 @@ def main():
         test_acc, test_loss = test(model, test_loader, device)
         scheduler.step(test_loss)
 
-        # Early Stopping and Checkpoint Logic
+        # Early stopping and checkpoint logic
         if test_acc > best_accuracy:
             best_accuracy = test_acc
             best_epoch = epoch
