@@ -37,7 +37,7 @@ def main():
     train_dataset = [add_vn(data, num_virtual_nodes=cfg.vn.num_vns) for data in train_dataset]
     test_dataset = [add_vn(data, num_virtual_nodes=cfg.vn.num_vns) for data in test_dataset]
 
-    # Add learnable edge weights
+    # Add edge weights - 1 for pre-existing edges and random weight for virtual edges
     train_dataset = [add_edge_weights(data, num_virtual_nodes=cfg.vn.num_vns) for data in train_dataset]
     test_dataset = [add_edge_weights(data, num_virtual_nodes=cfg.vn.num_vns) for data in test_dataset]
 
@@ -45,6 +45,16 @@ def main():
     test_loader = DataLoader(test_dataset, batch_size=cfg.train.batch_size, shuffle=False)
 
     # Initialize GCN model
+    """
+    Options:
+    - gcn_conv: uses random weights for virtual edges and applies standard message passing.
+    - gcn_learned_vn: learns weights for edges on top of standard message passing.
+    - gcn_attn_vn: instead of applying standard message passing for virtual nodes,
+                   pools node embeddings using attention scores to compute weighted average.
+
+    Results:
+    We find that the first option (simply apply random weights to virtual edges) works best.
+    """
     model = create_model(dim_out=10)  # uses graphgym GNN() module  (torch_geometric > graphgym > models > gnn.py)
 
     # Optimizer (asserts since I only hardcoded the following option)

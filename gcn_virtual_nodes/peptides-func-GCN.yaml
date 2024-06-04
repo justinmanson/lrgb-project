@@ -30,7 +30,7 @@ gnn:
   layers_mp: 5
   layers_post_mp: 1
   dim_inner: 300
-  layer_type: gcnconv_learned_vn
+  layer_type: gcnconv
   stage_type: stack
   batchnorm: True
   act: relu
