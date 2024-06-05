@@ -3,7 +3,6 @@ from copy import deepcopy
 import numpy as np
 import torch
 import torch.nn.functional as F
-from numpy.linalg import eigvals
 from torch_geometric.utils import (get_laplacian, to_scipy_sparse_matrix,
                                    to_undirected, to_dense_adj)
 from torch_geometric.utils.num_nodes import maybe_num_nodes

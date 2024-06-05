@@ -7,16 +7,21 @@ scipy
 networkx
 grakel
 node2vec
-torch==2.3  # ==1.11.0
+torch==2.3
 torchvision
-torch_geometric==2.5.3  # ==2.0.2
-openbabel  # this one might cause issues, look up and install binaries first (ubuntu: 
-fsspec
-rdkit
-# pip install dgl-cu111 dglgo -f https://data.dgl.ai/wheels/repo.html
-performer-pytorch
-torchmetrics  # ==0.7.2
-ogb
-wandb
-dgl==0.9.1
-pytorch_lightning
+torch_geometric==2.5.3
+pytorch-lightning  # required for GraphGym
+yacs  # required for GraphGym
+torch_scatter  # required for Laplacian positional encoding (tbh not really needed - only if using RWSE positional encoding)
+ogb  # required for Atom node encoder
+
+# The following packages are not strictly needed for the subset of code we use (i.e., we only run small parts of original LRGB implementation)
+# openbabel  # this one might cause issues, look up and install binaries first (ubuntu: 
+# fsspec
+# rdkit
+# pip install dgl-cu111 dglgo -f https://data.dgl.ai/wheels/repo.html  (I just installed with pip install dgl==0.0.1)
+# performer-pytorch
+# torchmetrics  # ==0.7.2
+# ogb
+# wandb
+# dgl==0.9.1

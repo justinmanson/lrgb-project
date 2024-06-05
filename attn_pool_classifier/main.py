@@ -2,53 +2,24 @@ import os
 import torch
 from torch_geometric.datasets import LRGBDataset
 from torch_geometric.loader import DataLoader
-import numpy as np
-from torch_geometric.graphgym.config import (cfg, dump_cfg,
-                                             set_cfg, load_cfg,
-                                             makedirs_rm_exist) 
-from torch_geometric.graphgym.model_builder import create_model
-from torch_geometric.utils import to_scipy_sparse_matrix, get_laplacian
-from functools import partial
-from transform.posenc_stats import get_lap_decomp_stats
 from torch.optim import AdamW
-
-from utils import train, test, Args
+from torch_geometric.graphgym.config import (cfg, set_cfg, load_cfg) 
+from torch_geometric.graphgym.model_builder import create_model
+from utils import Args, train, test
+from mil_classifier import AttentionPooling
+from torch_geometric.graphgym.register import register_pooling
 
 # import custom configs
 from config import *
-from model import *
-from encoder import *
-from transform import *
-    
-
-def compute_laplacian_eigen(data, normalization='sym', max_freqs=10, eigvec_norm=None):
-    """Compute eigenvalues and eigenvectors of the graph Laplacian."""
-    N = data.num_nodes if hasattr(data, 'num_nodes') else data.x.shape[0]
-    L = to_scipy_sparse_matrix(
-        *get_laplacian(data.edge_index, normalization=normalization, num_nodes=N)
-    )
-    
-    evals, evects = np.linalg.eigh(L.toarray())
-    
-    max_freqs=cfg.posenc_LapPE.eigen.max_freqs
-    eigvec_norm=cfg.posenc_LapPE.eigen.eigvec_norm
-
-    data.EigVals, data.EigVecs = get_lap_decomp_stats(
-        evals=evals, evects=evects,
-        max_freqs=max_freqs,
-        eigvec_norm=eigvec_norm
-    )
-
-    return data
-
+# from mil_classifier import *
 
 def main():
     # For full path
-    script_dir = os.path.dirname(os.path.realpath(__file__))
-    config_file = os.path.join(script_dir, 'peptides-func-SAN.yaml')
+    script_dir = os.path.dirname(os.path.realpath(__file__))  # allows us to run script from vscode terminal for debugging
+    config_file = os.path.join(script_dir, 'peptides-func-GCN.yaml')
 
     # Hardcode the configuration file
-    # config_file = 'peptides-func-SAN.yaml'
+    # config_file = 'peptides-func-GCN.yaml'
     args = Args(config_file)  # format to make load_cfg() work
     
     # Set and load config
@@ -59,23 +30,20 @@ def main():
     device = torch.device(cfg.accelerator)  # my prefered notation
     print(f'Using device: {device}')
 
-    pre_transform_func = partial(
-        compute_laplacian_eigen, 
-        normalization=cfg.posenc_LapPE.eigen.laplacian_norm, 
-        max_freqs=cfg.posenc_LapPE.eigen.max_freqs, 
-        eigvec_norm=cfg.posenc_LapPE.eigen.eigvec_norm
-    )
+    # Define pooling function after loading configs to access correct gnn.dim_inner size (should be 300)
+    register_pooling('attention_pool', AttentionPooling(L=cfg.gnn.dim_inner, M=2*cfg.gnn.dim_inner))
 
     # Load training and testing sets
-    train_dataset = LRGBDataset(root="data", name="peptides-func", split='train', pre_transform=pre_transform_func)
-    test_dataset = LRGBDataset(root="data", name="peptides-func", split='test', pre_transform=pre_transform_func)
+    train_dataset = LRGBDataset(root="data", name="peptides-func", split='train')
+    test_dataset = LRGBDataset(root="data", name="peptides-func", split='test')
+
     train_loader = DataLoader(train_dataset, batch_size=cfg.train.batch_size, shuffle=True)
     test_loader = DataLoader(test_dataset, batch_size=cfg.train.batch_size, shuffle=False)
 
-    # Initialize SAN model
-    model = create_model(dim_out=10)
+    # Load model
+    model = create_model(dim_out=10)  # uses graphgym GNN() module  (torch_geometric > graphgym > models > gnn.py)
 
-    # Optimizer (asserts since I overwrode with my own)
+    # Optimizer (asserts since I only hardcoded the following option)
     assert cfg.optim.optimizer == "adamW", "We implement 'adamW' but cfg specifies other option"
     assert cfg.optim.scheduler == "reduce_on_plateau", "We implement 'reduce_on_plateau' but cfg specifies other option"
     optimizer = AdamW(model.parameters(), lr=cfg.optim.base_lr, weight_decay=0.0)
@@ -110,7 +78,7 @@ def main():
             best_accuracy = test_acc
             best_epoch = epoch
             no_improve_epochs = 0
-            torch.save(model.state_dict(), os.path.join(model_save_dir, f'san_weights.pt'))
+            torch.save(model.state_dict(), os.path.join(model_save_dir, f'mil_classifier_weights.pt'))
             print(f'New best model saved at epoch {epoch} with accuracy {test_acc:.4f}')
         else:
             no_improve_epochs += 1
@@ -121,7 +89,7 @@ def main():
 
         print(f'Epoch: {epoch:03d}, Loss: {loss:.4f}, Accuracy: {test_acc:.4f}')
 
-    print(f'Best SAN model: Epoch {best_epoch} with Accuracy {best_accuracy:.4f}')
+    print(f'Best GCN model: Epoch {best_epoch} with Accuracy {best_accuracy:.4f}')
 
 
 if __name__ == "__main__":

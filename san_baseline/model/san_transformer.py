@@ -3,8 +3,6 @@ import torch_geometric.graphgym.register as register
 from torch_geometric.graphgym.config import cfg
 from torch_geometric.graphgym.models.gnn import FeatureEncoder, GNNPreMP
 from torch_geometric.graphgym.register import register_network
-from torch_geometric.data import Data
-
 
 from .san_layer import SANLayer
 
