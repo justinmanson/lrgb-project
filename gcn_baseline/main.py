@@ -7,7 +7,9 @@ from torch_geometric.graphgym.config import (cfg, dump_cfg,
                                              set_cfg, load_cfg,
                                              makedirs_rm_exist) 
 from torch_geometric.graphgym.model_builder import create_model
+from torch_geometric.graphgym.register import register_pooling
 
+from attention_pooling import GatedAttention
 from utils import train, test, Args
 
 # import custom configs
@@ -30,6 +32,9 @@ def main():
     cfg.accelerator = 'cuda' if torch.cuda.is_available() else 'cpu'  # add to config - needed for create_model()
     device = torch.device(cfg.accelerator)  # my prefered notation
     print(f'Using device: {device}')
+
+    # Define pooling function after loading configs to access correct gnn.dim_inner size (should be 300)
+    register_pooling('attention_pool', GatedAttention(M=cfg.gnn.dim_inner, L=2*cfg.gnn.dim_inner))
 
     # Load training and testing sets
     train_dataset = LRGBDataset(root="data", name="peptides-func", split='train')

@@ -6,7 +6,7 @@ from torch.optim import AdamW
 from torch_geometric.graphgym.config import (cfg, set_cfg, load_cfg) 
 from torch_geometric.graphgym.model_builder import create_model
 from utils import Args, train, test
-from mil_classifier import AttentionPooling
+from attention_pooling import GatedAttention
 from torch_geometric.graphgym.register import register_pooling
 
 # import custom configs
@@ -31,7 +31,7 @@ def main():
     print(f'Using device: {device}')
 
     # Define pooling function after loading configs to access correct gnn.dim_inner size (should be 300)
-    register_pooling('attention_pool', AttentionPooling(L=cfg.gnn.dim_inner, M=2*cfg.gnn.dim_inner))
+    register_pooling('attention_pool', GatedAttention(M=cfg.gnn.dim_inner, L=2*cfg.gnn.dim_inner))
 
     # Load training and testing sets
     train_dataset = LRGBDataset(root="data", name="peptides-func", split='train')

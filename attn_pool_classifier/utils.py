@@ -1,12 +1,10 @@
 import torch
-import torch.nn as nn
 from tqdm import tqdm
 from torch_geometric.loader import DataLoader
 from torch.optim import Optimizer
 from typing import Tuple
 import numpy as np
 from sklearn.metrics import average_precision_score
-import time
 
 class Args:
     def __init__(self, cfg_file):
