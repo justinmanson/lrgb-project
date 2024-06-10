@@ -1,6 +1,6 @@
-# Graph Classification Using LRGB Dataset
+# Graph Classification Using LRGB
 
-This project utilizes the LRGB dataset to test and compare various architectures designed to model long-range interactions within graphs. Our focus is on a graph classification task using the peptides functional dataset from within the LRGB dataset.
+This project utilizes the Long Range Graph Benchmark (LRGB) to test and compare various architectures designed to model long-range interactions within graphs. Our focus is on a graph classification task using the peptides functional dataset from within the LRGB.
 
 ## Project Structure
 
