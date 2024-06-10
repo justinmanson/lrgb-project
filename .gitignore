@@ -1,6 +1,7 @@
 # Directories to ignore
 data/
 model_weights/
+datasets/
 
 # Byte-compiled / optimized / DLL files
 __pycache__/

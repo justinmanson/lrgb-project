@@ -2,56 +2,73 @@ import os
 import torch
 from torch_geometric.datasets import LRGBDataset
 from torch_geometric.loader import DataLoader
-import numpy as np
+from torch.optim import AdamW
 from torch_geometric.graphgym.config import (cfg, dump_cfg,
                                              set_cfg, load_cfg,
                                              makedirs_rm_exist) 
+# from custom_config import (cfg, dump_cfg,
+#                     set_cfg, load_cfg,
+#                     makedirs_rm_exist) 
 from torch_geometric.graphgym.model_builder import create_model
-from torch_geometric.utils import to_scipy_sparse_matrix, get_laplacian
-from functools import partial
-from transform.posenc_stats import get_lap_decomp_stats
-from torch.optim import AdamW
+from torch_geometric.graphgym.register import register_pooling
+from tqdm import tqdm
+from torch_geometric.data import Data
 
 from utils import train, test, Args, save_result_logs
+from graphgps.make_k_hop_edges import make_k_hop_edges
 
 # import custom configs
 from config import *
-from model import *
-from encoder import *
-from transform import *
+import graphgps  # noqa, register custom modules
 
+EXPERIMENT_NAME = "drew_gcn"
 
-EXPERIMENT_NAME = "san"
-    
+def remove_edge_attrs(dataset):
+    """Removes edge attrs from dataset for experiments which don't use them"""
+    dataset.data.edge_attr = None
+    if any([dataset.get(i).edge_attr is not None for i in range(len(dataset))]):
+        print('Removing edge attrs so GDC preprocessing can be performed...')
+        count = 0
+        for i in tqdm(range(len(dataset))): 
+            if dataset.get(i).edge_attr is not None:
+                count += 1
+                dataset._data_list[i] = Data(x=dataset.get(i).x,
+                                            edge_index=dataset.get(i).edge_index,
+                                            edge_attr=None,
+                                            y=dataset.get(i).y)
+        assert not any([dataset.get(i).edge_attr is not None for i in range(len(dataset))])
+    return dataset
 
-def compute_laplacian_eigen(data, normalization='sym', max_freqs=10, eigvec_norm=None):
-    """Compute eigenvalues and eigenvectors of the graph Laplacian."""
-    N = data.num_nodes if hasattr(data, 'num_nodes') else data.x.shape[0]
-    L = to_scipy_sparse_matrix(
-        *get_laplacian(data.edge_index, normalization=normalization, num_nodes=N)
-    )
-    
-    evals, evects = np.linalg.eigh(L.toarray())
-    
-    max_freqs=cfg.posenc_LapPE.eigen.max_freqs
-    eigvec_norm=cfg.posenc_LapPE.eigen.eigvec_norm
+def update_drew_edge_attributes(cfg, dataset, split):
+    multi_hop_stages = [
+            'sp_gnn',
+            'drew_gnn',
+            'k_gnn',
+    ]
+    multi_hop_models = ['drew_gated_gnn', 'drew_gin']
+    use_drew = any([
+        (cfg.gnn.stage_type in multi_hop_stages),
+        ('delay' in cfg.gnn.stage_type),
+        (cfg.model.type in multi_hop_models),
+    ])
 
-    data.EigVals, data.EigVecs = get_lap_decomp_stats(
-        evals=evals, evects=evects,
-        max_freqs=max_freqs,
-        eigvec_norm=eigvec_norm
-    )
+    if use_drew or ('noedge' in cfg.gnn.layer_type) or ('peptides' in cfg.dataset.name):
+        dataset = remove_edge_attrs(dataset)
 
-    return data
+        k_max = min(cfg.gnn.layers_mp, cfg.k_max)
+        dataset = make_k_hop_edges(dataset, k_max, cfg.dataset.format, cfg.dataset.name, split)
+    else:
+        print("If not drew, then why are we running this script?")
+
+    return dataset
 
 
 def main():
     # For full path
     script_dir = os.path.dirname(os.path.realpath(__file__))
-    config_file = os.path.join(script_dir, 'peptides-func-SAN.yaml')
+    config_file = os.path.join(script_dir, 'pept-func_DRew-GCN_bs=0128_d=042_L=23.yaml')
 
     # Hardcode the configuration file
-    # config_file = 'peptides-func-SAN.yaml'
     args = Args(config_file)  # format to make load_cfg() work
     
     # Set and load config
@@ -62,24 +79,22 @@ def main():
     device = torch.device(cfg.accelerator)  # my prefered notation
     print(f'Using device: {device}')
 
-    pre_transform_func = partial(
-        compute_laplacian_eigen, 
-        normalization=cfg.posenc_LapPE.eigen.laplacian_norm, 
-        max_freqs=cfg.posenc_LapPE.eigen.max_freqs, 
-        eigvec_norm=cfg.posenc_LapPE.eigen.eigvec_norm
-    )
-
     # Load training and testing sets
-    train_dataset = LRGBDataset(root="data", name="peptides-func", split='train', pre_transform=pre_transform_func)
-    val_dataset = LRGBDataset(root="data", name="peptides-func", split='val', pre_transform=pre_transform_func)
-    test_dataset = LRGBDataset(root="data", name="peptides-func", split='test', pre_transform=pre_transform_func)
-    
+    train_dataset = LRGBDataset(root="data", name="peptides-func", split='train')
+    val_dataset = LRGBDataset(root="data", name="peptides-func", split='val')
+    test_dataset = LRGBDataset(root="data", name="peptides-func", split='test')
+
+    # DREW SPECIFIC
+    train_dataset = update_drew_edge_attributes(cfg, train_dataset, 'train')
+    val_dataset = update_drew_edge_attributes(cfg, val_dataset, 'val')
+    test_dataset = update_drew_edge_attributes(cfg, test_dataset, 'test')
+
     train_loader = DataLoader(train_dataset, batch_size=cfg.train.batch_size, shuffle=True)
     val_loader = DataLoader(val_dataset, batch_size=cfg.train.batch_size, shuffle=False)
     test_loader = DataLoader(test_dataset, batch_size=cfg.train.batch_size, shuffle=False)
 
-    # Initialize SAN model
-    model = create_model(dim_out=10)
+    # Initialize GCN model
+    model = create_model(dim_out=10)  # uses graphgym GNN() module  (torch_geometric > graphgym > models > gnn.py)
 
     # Optimizer (asserts since I overwrode with my own)
     assert cfg.optim.optimizer == "adamW", "We implement 'adamW' but cfg specifies other option"

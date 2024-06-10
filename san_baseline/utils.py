@@ -5,6 +5,8 @@ from torch.optim import Optimizer
 from typing import Tuple
 import numpy as np
 from sklearn.metrics import average_precision_score
+import os
+import pandas as pd
 
 class Args:
     def __init__(self, cfg_file):
@@ -47,3 +49,20 @@ def test(model: torch.nn.Module, loader: DataLoader, device: torch.device) -> Tu
     ap_scores = [average_precision_score(all_labels[:, i], all_preds[:, i]) for i in range(all_labels.shape[1])]
     mean_ap = np.mean(ap_scores)
     return mean_ap, total_loss / len(loader)
+
+def save_result_logs(experiment_name, best_epoch, best_val_acc, test_acc):
+    result_log_dir = '../result_logs'
+    os.makedirs(result_log_dir, exist_ok=True)
+    result_log_file = os.path.join(result_log_dir, f'{experiment_name}_logs.csv')
+
+    stats = {
+        'best_epoch': best_epoch,
+        'best_val_acc': best_val_acc,
+        'test_acc': test_acc
+    }
+
+    df = pd.DataFrame([stats])
+    df.to_csv(result_log_file, index=False)
+    df.to_csv(f'{experiment_name}_logs.csv', index=False)
+
+    print(f'Statistics saved to {result_log_file}')
